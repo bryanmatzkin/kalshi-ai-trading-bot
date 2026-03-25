@@ -41,15 +41,6 @@ class KalshiClient(TradingLoggerMixin):
         max_retries: int = 5,
         backoff_factor: float = 0.5
     ):
-        """
-        Initialize Kalshi client.
-        
-        Args:
-            api_key: Kalshi API key (Key ID from the API key generation)
-            private_key_path: Path to private key file
-            max_retries: Maximum number of retries for failed requests
-            backoff_factor: Factor for exponential backoff
-        """
         self.api_key = api_key or settings.api.kalshi_api_key
         self.base_url = settings.api.kalshi_base_url
         self.private_key_path = private_key_path or os.environ.get("KALSHI_PRIVATE_KEY_PATH", "kalshi_private_key.pem")
@@ -57,52 +48,44 @@ class KalshiClient(TradingLoggerMixin):
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         
-        # Load private key
         self._load_private_key()
         
-        # HTTP client with timeouts
         self.client = httpx.AsyncClient(
             timeout=30.0,
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
         )
         
         self.logger.info("Kalshi client initialized", api_key_length=len(self.api_key) if self.api_key else 0)
-    
+
     def _load_private_key(self) -> None:
-        """Load private key from file."""
+        """Load private key from environment variable or file."""
         try:
-            private_key_path = Path(self.private_key_path)
-            if not private_key_path.exists():
-                raise KalshiAPIError(f"Private key file not found: {self.private_key_path}")
-            
-            with open(private_key_path, 'rb') as f:
+            key_content = os.environ.get("KALSHI_PRIVATE_KEY")
+            if key_content:
                 self.private_key = serialization.load_pem_private_key(
-                    f.read(),
+                    key_content.encode(),
                     password=None
                 )
-            self.logger.info("Private key loaded successfully")
+                self.logger.info("Private key loaded from environment variable")
+            else:
+                private_key_path = Path(self.private_key_path)
+                if not private_key_path.exists():
+                    raise KalshiAPIError(f"Private key file not found: {self.private_key_path}")
+                with open(private_key_path, 'rb') as f:
+                    self.private_key = serialization.load_pem_private_key(
+                        f.read(),
+                        password=None
+                    )
+                self.logger.info("Private key loaded successfully")
         except Exception as e:
             self.logger.error("Failed to load private key", error=str(e))
             raise KalshiAPIError(f"Failed to load private key: {e}")
-    
+
     def _sign_request(self, timestamp: str, method: str, path: str) -> str:
-        """
-        Sign request using RSA PSS signing method as per Kalshi API docs.
-        
-        Args:
-            timestamp: Request timestamp in milliseconds
-            method: HTTP method
-            path: Request path
-        
-        Returns:
-            Base64 encoded signature
-        """
-        # Create message to sign: timestamp + method + path
         message = timestamp + method.upper() + path
         message_bytes = message.encode('utf-8')
         
         try:
-            # Sign using RSA PSS as per Kalshi documentation
             signature = self.private_key.sign(
                 message_bytes,
                 padding.PSS(
@@ -111,7 +94,6 @@ class KalshiClient(TradingLoggerMixin):
                 ),
                 hashes.SHA256()
             )
-            
             return base64.b64encode(signature).decode('utf-8')
         except Exception as e:
             self.logger.error("Failed to sign request", error=str(e))
@@ -125,46 +107,25 @@ class KalshiClient(TradingLoggerMixin):
         json_data: Optional[Dict] = None,
         require_auth: bool = True
     ) -> Dict[str, Any]:
-        """
-        Make authenticated request to Kalshi API with retry logic.
-        
-        Args:
-            method: HTTP method
-            endpoint: API endpoint
-            params: Query parameters
-            json_data: JSON request body
-            require_auth: Whether authentication is required
-        
-        Returns:
-            API response data
-        """
-        # Prepare request
         url = f"{self.base_url}{endpoint}"
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
         
-        # Add authentication headers if required
         if require_auth:
-            # Get current timestamp in milliseconds
             timestamp = str(int(time.time() * 1000))
-            
-            # Create signature
             signature = self._sign_request(timestamp, method, endpoint)
-            
             headers.update({
                 "KALSHI-ACCESS-KEY": self.api_key,
                 "KALSHI-ACCESS-TIMESTAMP": timestamp,
                 "KALSHI-ACCESS-SIGNATURE": signature
             })
         
-        # Prepare body
         body = None
         if json_data:
             body = json.dumps(json_data, separators=(',', ':'))
         
-        # Add query parameters to URL if present
         if params:
             query_string = urlencode(params)
             url = f"{url}?{query_string}"
@@ -180,8 +141,7 @@ class KalshiClient(TradingLoggerMixin):
                     attempt=attempt + 1
                 )
                 
-                # Add aggressive delay between requests to prevent 429s
-                await asyncio.sleep(0.5)  # 500ms delay = max 2 requests/second
+                await asyncio.sleep(0.5)
                 
                 response = await self.client.request(
                     method=method,
@@ -195,7 +155,6 @@ class KalshiClient(TradingLoggerMixin):
                 
             except httpx.HTTPStatusError as e:
                 last_exception = e
-                # Rate limit (429) or server errors (5xx) are worth retrying
                 if e.response.status_code == 429 or e.response.status_code >= 500:
                     sleep_time = self.backoff_factor * (2 ** attempt)
                     self.logger.warning(
@@ -205,7 +164,6 @@ class KalshiClient(TradingLoggerMixin):
                     )
                     await asyncio.sleep(sleep_time)
                 else:
-                    # Don't retry on other client errors (e.g., 400, 401, 404)
                     error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
                     self.logger.error("API request failed without retry", error=error_msg, endpoint=endpoint)
                     raise KalshiAPIError(error_msg)
@@ -253,20 +211,6 @@ class KalshiClient(TradingLoggerMixin):
         status: Optional[str] = None,
         tickers: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """
-        Get markets data.
-        
-        Args:
-            limit: Maximum number of markets to return
-            cursor: Pagination cursor
-            event_ticker: Filter by event ticker
-            series_ticker: Filter by series ticker
-            status: Filter by market status
-            tickers: List of specific tickers to fetch
-        
-        Returns:
-            Markets data
-        """
         params = {"limit": limit}
         
         if cursor:
@@ -291,16 +235,6 @@ class KalshiClient(TradingLoggerMixin):
         )
     
     async def get_orderbook(self, ticker: str, depth: int = 100) -> Dict[str, Any]:
-        """
-        Get market orderbook.
-        
-        Args:
-            ticker: Market ticker
-            depth: Orderbook depth
-        
-        Returns:
-            Orderbook data
-        """
         params = {"depth": depth}
         return await self._make_authenticated_request(
             "GET", f"/trade-api/v2/markets/{ticker}/orderbook", params=params, require_auth=False
@@ -313,18 +247,6 @@ class KalshiClient(TradingLoggerMixin):
         end_ts: Optional[int] = None,
         limit: int = 100
     ) -> Dict[str, Any]:
-        """
-        Get market price history.
-        
-        Args:
-            ticker: Market ticker
-            start_ts: Start timestamp
-            end_ts: End timestamp
-            limit: Number of records to return
-        
-        Returns:
-            Price history data
-        """
         params = {"limit": limit}
         if start_ts:
             params["start_ts"] = start_ts
@@ -347,23 +269,6 @@ class KalshiClient(TradingLoggerMixin):
         no_price: Optional[int] = None,
         expiration_ts: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        Place a trading order.
-        
-        Args:
-            ticker: Market ticker
-            client_order_id: Unique client order ID
-            side: "yes" or "no"
-            action: "buy" or "sell"
-            count: Number of contracts
-            type_: Order type ("market" or "limit")
-            yes_price: Yes price in cents (for limit orders)
-            no_price: No price in cents (for limit orders)
-            expiration_ts: Order expiration timestamp
-        
-        Returns:
-            Order response
-        """
         order_data = {
             "ticker": ticker,
             "client_order_id": client_order_id,
@@ -396,17 +301,6 @@ class KalshiClient(TradingLoggerMixin):
         limit: int = 100,
         cursor: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Get trade history.
-        
-        Args:
-            ticker: Filter by ticker
-            limit: Maximum number of trades to return
-            cursor: Pagination cursor
-        
-        Returns:
-            Trades data
-        """
         params = {"limit": limit}
         if ticker:
             params["ticker"] = ticker
@@ -423,9 +317,7 @@ class KalshiClient(TradingLoggerMixin):
         self.logger.info("Kalshi client closed")
     
     async def __aenter__(self):
-        """Async context manager entry."""
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.close() 
+        await self.close()
