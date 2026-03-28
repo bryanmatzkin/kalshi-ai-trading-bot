@@ -564,7 +564,7 @@ class SafeCompounder:
         print(
             f"\n{'='*70}\nPLACING MAKER ORDERS — Portfolio: ${portfolio/100:.2f} | "
             f"Cash: ${cash/100:.2f} | {'DRY RUN' if self.dry_run else 'LIVE'}\n"
-            f"Max per position: ${portfolio * self.max_position_pct / 100:.2f} ({self.max_position_pct*100:.0f}%)\n"
+            f"Max per position: ${cash * self.max_position_pct / 100:.2f} ({self.max_position_pct*100:.0f}%)\n"
             f"{'='*70}\n",
             flush=True,
         )
