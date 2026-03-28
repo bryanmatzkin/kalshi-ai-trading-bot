@@ -111,7 +111,7 @@ class XAIClient(TradingLoggerMixin):
                         date=today,
                         daily_limit=daily_limit
                     )
-                 else:
+                else:
                     # Always sync daily_limit from settings (user may have changed it)
                     if tracker.daily_limit != daily_limit:
                         tracker.daily_limit = daily_limit
