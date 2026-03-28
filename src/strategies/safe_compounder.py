@@ -398,7 +398,7 @@ class SafeCompounder:
             # Convert old cent format to dollar format if needed
             if yes_last > 1.0:
                 yes_last = yes_last / 100.0
-            if yes_last > 0.20:  # Only consider markets with YES ≤ $0.20
+            if yes_last > 0.35:  # Only consider markets with YES ≤ $0.20
                 continue
 
             close_time = m.get("close_time", "")
