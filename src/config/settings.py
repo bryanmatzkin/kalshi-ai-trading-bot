@@ -69,9 +69,9 @@ class SentimentConfig:
 class TradingConfig:
     """Trading strategy configuration."""
     # Position sizing and risk management — DISCIPLINED DEFAULTS
-    max_position_size_pct: float = 3.0  # SANE: 3% per position (was 5% "beast mode")
+    max_position_size_pct: float = 2.0  # SANE: 3% per position (was 5% "beast mode")
     max_daily_loss_pct: float = 10.0    # SANE: 10% daily loss limit (was 15%)
-    max_positions: int = 10              # SANE: 10 concurrent positions (was 15)
+    max_positions: int = 5              # SANE: 10 concurrent positions (was 15)
     min_balance: float = 100.0          # SANE: $100 minimum balance (was $50)
     
     # Market filtering criteria — DISCIPLINED
@@ -85,13 +85,13 @@ class TradingConfig:
     
     # Category-specific confidence adjustments (applied as multipliers to base threshold)
     category_confidence_adjustments: Dict[str, float] = field(default_factory=lambda: {
-        "sports": 0.90,      # Sports showed best performance (NCAAB 74% WR), lower threshold
-        "economics": 1.15,   # Economics showed -70% ROI, higher threshold required  
-        "politics": 1.05,    # Slight increase for political volatility
-        "default": 1.0       # Base multiplier for other categories
+        "sports": 0.85,      # Sports showed best performance (NCAAB 74% WR), lower threshold
+        "economics": 1.50,   # Economics showed -70% ROI, higher threshold required  
+        "politics": 1.25,    # Slight increase for political volatility
+        "default": 1.20       # Base multiplier for other categories
     })
     
-    scan_interval_seconds: int = 60      # SANE: 60-second scan interval (was 30)
+    scan_interval_seconds: int = 100      # SANE: 60-second scan interval (was 30)
     
     # AI model configuration
     primary_model: str = "grok-3"  # xAI Grok model for forecasting
@@ -137,13 +137,13 @@ class TradingConfig:
     daily_ai_budget: float = 10.0  # INCREASED: Higher daily budget (was 5.0, now 10.0)
     max_ai_cost_per_decision: float = 0.08  # INCREASED: Higher per-decision cost (was 0.05, now 0.08)
     analysis_cooldown_hours: int = 3  # DECREASED: Shorter cooldown (was 6, now 3)
-    max_analyses_per_market_per_day: int = 4  # INCREASED: More analyses per day (was 2, now 4)
+    max_analyses_per_market_per_day: int = 2  # INCREASED: More analyses per day (was 2, now 4)
     
     # Daily AI spending limits - SAFETY CONTROLS
     # Default is $10/day — conservative limit to prevent runaway API spend.
     # Raise via DAILY_AI_COST_LIMIT env var or by editing this value directly.
     # e.g. export DAILY_AI_COST_LIMIT=25  (for more aggressive scanning)
-    daily_ai_cost_limit: float = field(default_factory=lambda: float(os.getenv("DAILY_AI_COST_LIMIT", "10.0")))
+    daily_ai_cost_limit: float = field(default_factory=lambda: float(os.getenv("DAILY_AI_COST_LIMIT", "5.0")))
     enable_daily_cost_limiting: bool = True  # Enable daily cost limits
     sleep_when_limit_reached: bool = True  # Sleep until next day when limit reached
 
