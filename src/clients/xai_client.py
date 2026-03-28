@@ -99,32 +99,26 @@ class XAIClient(TradingLoggerMixin):
         
         # Ensure logs directory exists
         os.makedirs("logs", exist_ok=True)
-        
         try:
             if os.path.exists(usage_file):
                 with open(usage_file, 'rb') as f:
                     tracker = pickle.load(f)
-                    
-                # Reset if new day
                 if tracker.date != today:
                     tracker = DailyUsageTracker(
                         date=today,
                         daily_limit=daily_limit
                     )
                 else:
-                    # Always sync daily_limit from settings (user may have changed it)
                     if tracker.daily_limit != daily_limit:
                         tracker.daily_limit = daily_limit
-                    # Fix corrupted state: never exhausted if cost is 0
                     if tracker.total_cost == 0:
                         tracker.is_exhausted = False
-                    # Un-exhaust if new limit is higher than current cost
                     if tracker.is_exhausted and tracker.total_cost < daily_limit:
                         tracker.is_exhausted = False
                 return tracker
         except Exception as e:
             self.logger.warning(f"Failed to load daily tracker: {e}")
-        
+
         # Create new tracker
         return DailyUsageTracker(date=today, daily_limit=daily_limit)
 
