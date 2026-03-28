@@ -60,7 +60,7 @@ SKIP_TITLE_PHRASES = [
 MIN_VOLUME = 10
 MIN_NO_ASK = 0.80      # Lowest NO ask must be > $0.80
 MIN_EDGE = 0.05        # Edge (EV - price) must be > $0.05
-MAX_POSITION_PCT = 0.10    # Max 10% of portfolio per position
+MAX_POSITION_PCT = 0.50    # Max 10% of portfolio per position
 USE_KELLY = True
 MIN_CONFIDENCE = 0.4
 
@@ -649,7 +649,7 @@ class SafeCompounder:
 
     def _calculate_position_size(self, opp: Dict, portfolio: int, cash: int) -> int:
         """Size each position using Kelly or fixed fraction."""
-        max_position_value = int(portfolio * self.max_position_pct)
+        max_position_value = int(cash * self.max_position_pct)
         price = opp["our_price"]  # Already in dollar format
 
         if self.use_kelly:
@@ -657,7 +657,7 @@ class SafeCompounder:
             odds = (1.0 - price) / price  # Dollar format
             kf = kelly_fraction(true_prob, odds)
             half_kelly_f = kf * 0.5
-            kelly_position = int(portfolio * half_kelly_f)
+            kelly_position = int(cash * half_kelly_f)
             position_value = min(kelly_position, max_position_value)
         else:
             position_value = max_position_value
