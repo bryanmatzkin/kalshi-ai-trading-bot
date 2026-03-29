@@ -175,8 +175,9 @@ class XAIClient(TradingLoggerMixin):
         """
         # Reload tracker to get latest state
         self.daily_tracker = self._load_daily_tracker()
-        
-        if self.daily_tracker.is_exhausted:
+
+        if self.daily_tracker.is_exhausted and self.daily_tracker.total_cost > 0:
+
             now = datetime.now()
             
             # Check if it's a new day
